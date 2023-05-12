@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 
-import { PostExcerpt } from './PostExcerpt';
+import PostExcerpt from './PostExcerpt';
 import { Spinner } from '../../components/Spinner';
 
 import { selectAllPosts, fetchPosts } from './postsSlice';
 
 export const PostsList = () => {
+  console.log('--PostsList()--');
   const dispatch = useDispatch();
   const posts = useSelector(selectAllPosts);
   console.log('posts: ', posts);
