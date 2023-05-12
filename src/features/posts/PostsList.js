@@ -4,13 +4,11 @@ import { useSelector, useDispatch } from 'react-redux';
 import PostExcerpt from './PostExcerpt';
 import { Spinner } from '../../components/Spinner';
 
-import { selectAllPosts, fetchPosts } from './postsSlice';
+import { selectPostIds, fetchPosts } from './postsSlice';
 
 export const PostsList = () => {
   console.log('--PostsList()--');
   const dispatch = useDispatch();
-  const posts = useSelector(selectAllPosts);
-  console.log('posts: ', posts);
 
   const postStatus = useSelector(state => state.posts.status);
   const error = useSelector(state => state.posts.error);
@@ -23,16 +21,13 @@ export const PostsList = () => {
 
   let content;
 
+  const orderedPostIds = useSelector(selectPostIds)
+
   if (postStatus === 'loading') {
     content = <Spinner text="Loading..." />
   } else if (postStatus === 'succeeded') {
-    // Sort posts in reverse chronological order by datetime string
-    const orderedPosts = posts
-      .slice()
-      .sort((a, b) => b.date.localeCompare(a.date))
-
-    content = orderedPosts.map(post => (
-      <PostExcerpt key={post.id} post={post} />
+    content = orderedPostIds.map(postId => (
+      <PostExcerpt key={postId} postId={postId} />
     ))
   } else if (postStatus === 'failed') {
     content = <div>{error}</div>
