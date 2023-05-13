@@ -1,41 +1,49 @@
-import React, { useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import React, { useMemo } from 'react';
+import classnames from 'classnames'
 
 import PostExcerpt from './PostExcerpt';
 import { Spinner } from '../../components/Spinner';
 
-import { selectPostIds, fetchPosts } from './postsSlice';
+import { useGetPostsQuery } from '../api/apiSlice';
 
 export const PostsList = () => {
   console.log('--PostsList()--');
-  const dispatch = useDispatch();
 
-  const postStatus = useSelector(state => state.posts.status);
-  const error = useSelector(state => state.posts.error);
+  const {
+    data: posts = [],
+    isLoading,
+    isFetching,
+    isSuccess,
+    isError,
+    error,
+    refetch,
+  } = useGetPostsQuery();
 
-  useEffect(() => {
-    if (postStatus === 'idle') {
-      dispatch(fetchPosts())
-    }
-  }, [postStatus, dispatch]);
+  const sortedPosts = useMemo(() => {
+    const sortedPosts = posts.slice();
+    // Sort posts in descending chronological order
+    sortedPosts.sort((a, b) => b.date.localeCompare(a.date));
+    return sortedPosts;
+  }, [posts])
 
   let content;
 
-  const orderedPostIds = useSelector(selectPostIds)
-
-  if (postStatus === 'loading') {
+  if (isLoading) {
     content = <Spinner text="Loading..." />
-  } else if (postStatus === 'succeeded') {
-    content = orderedPostIds.map(postId => (
-      <PostExcerpt key={postId} postId={postId} />
-    ))
-  } else if (postStatus === 'failed') {
+  } else if (isSuccess) {
+    const containerClassname = classnames('posts-container', {
+      disabled: isFetching,
+    })
+    const renderedPosts = sortedPosts.map(post => <PostExcerpt key={post.id} post={post} />)
+    content = <div className={containerClassname}>{renderedPosts}</div>
+  } else if (isError) {
     content = <div>{error}</div>
   }
 
   return (
     <section className="posts-list">
       <h2>Posts</h2>
+      <button onClick={refetch}>Refetch Posts</button>
       {content}
     </section>
   );

@@ -1,16 +1,15 @@
 import React, { useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
+import { useSelector } from 'react-redux'
 
-import { addNewPost } from './postsSlice'
 import { selectAllUsers } from '../users/usersSlice'
+import { useAddNewPostMutation } from '../api/apiSlice'
 
 export const AddPostForm = () => {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [userId, setUserId] = useState('')
-  const [addRequestStatus, setAddRequestStatus] = useState('idle')
 
-  const dispatch = useDispatch();
+  const [addNewPost, { isLoading }] = useAddNewPostMutation();
 
   const users = useSelector(selectAllUsers);
 
@@ -21,21 +20,17 @@ export const AddPostForm = () => {
   const onSavePostClicked = async () => {
     if (canSave) {
       try {
-        setAddRequestStatus('pending')
-        await dispatch(addNewPost({ title, content, user: userId })).unwrap()
+        await addNewPost({ title, content, user: userId }).unwrap()
         setTitle('')
         setContent('')
         setUserId('')
       } catch (err) {
         console.error('Failed to save the post: ', err)
-      } finally {
-        setAddRequestStatus('idle')
       }
     }
   };
 
-  const canSave = [title, content, userId].every(Boolean)
-    && addRequestStatus === 'idle';
+  const canSave = [title, content, userId].every(Boolean) && !isLoading;
 
   const usersOptions = users.map(user => (
     <option key={user.id} value={user.id}>
