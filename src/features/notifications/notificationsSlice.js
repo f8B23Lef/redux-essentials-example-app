@@ -1,9 +1,18 @@
-import { createSlice, createAsyncThunk, createEntityAdapter, createSelector } from '@reduxjs/toolkit'
+import {
+  createAction,
+  createSlice,
+  createEntityAdapter,
+  createSelector,
+  isAnyOf,
+} from '@reduxjs/toolkit'
 
-import { client } from '../../api/client'
 import { forceGenerateNotifications } from '../../api/server'
 
 import { apiSlice } from '../api/apiSlice'
+
+const notificationsReceived = createAction(
+  'notifications/notificationsReceived'
+);
 
 export const extendedApi = apiSlice.injectEndpoints({
   endpoints: builder => ({
@@ -11,7 +20,7 @@ export const extendedApi = apiSlice.injectEndpoints({
       query: () => '/notifications',
       async onCacheEntryAdded(
         arg,
-        { updateCachedData, cacheDataLoaded, cacheEntryRemoved }
+        { updateCachedData, cacheDataLoaded, cacheEntryRemoved, dispatch }
       ) {
         // create a websocket connection when the cache subscription starts
         const ws = new WebSocket('ws://localhost')
@@ -31,6 +40,8 @@ export const extendedApi = apiSlice.injectEndpoints({
                   draft.push(...message.payload)
                   draft.sort((a, b) => b.date.localeCompare(a.date))
                 })
+                // Dispatch an additional action so we can track "read" state
+                dispatch(notificationsReceived(message.payload))
                 break
               }
               default:
@@ -72,25 +83,13 @@ export const fetchNotificationsWebsocket = () => (dispatch, getState) => {
   forceGenerateNotifications(latestTimestamp)
 }
 
-export const fetchNotifications = createAsyncThunk(
-  'notifications/fetchNotifications',
-  async (_, { getState }) => {
-    const allNotifications = selectAllNotifications(getState())
-    const [latestNotification] = allNotifications
-    const latestTimestamp = latestNotification ? latestNotification.date : ''
-    console.log('latestTimestamp: ', latestTimestamp);
-    const response = await client.get(
-      `/fakeApi/notifications?since=${latestTimestamp}` // 'since' doesn't work :(
-    )
 
-    return response.data
-  }
+const notificationsAdapter = createEntityAdapter()
+
+const matchNotificationsReceived = isAnyOf(
+  notificationsReceived,
+  extendedApi.endpoints.getNotifications.matchFulfilled
 )
-
-const notificationsAdapter = createEntityAdapter({
-  // sortComparer: (a, b) => b.date.localeCompare(a.date)
-  sortComparer: (a, b) => -1
-})
 
 const notificationsSlice = createSlice({
   name: 'notifications',
@@ -103,13 +102,21 @@ const notificationsSlice = createSlice({
     },
   },
   extraReducers(builder) {
-    builder.addCase(fetchNotifications.fulfilled, (state, action) => {
+    builder.addMatcher(matchNotificationsReceived, (state, action) => {
       console.log('action in builder: ', action);
-      notificationsAdapter.upsertMany(state, action.payload)
-      Object.values(state.entities).forEach(notification => {
+      // Add client-side metadata for tracking new notifications
+      const notificationsMetadata = action.payload.map((notification) => ({
+        id: notification.id,
+        read: false,
+        isNew: true,
+      }))
+
+      Object.values(state.entities).forEach((notification) => {
         // Any notifications we've read are no longer new
         notification.isNew = !notification.read
       })
+
+      notificationsAdapter.upsertMany(state, notificationsMetadata)
       // Sort with newest first
       // state.sort((a, b) => b.date.localeCompare(a.date))
       // state.reverse() // used since 'since' param doesn't work in notifications request
@@ -121,5 +128,7 @@ export const { allNotificationsRead } = notificationsSlice.actions
 
 export default notificationsSlice.reducer
 
-export const { selectAll: selectAllNotifications } =
-  notificationsAdapter.getSelectors(state => state.notifications)
+export const {
+  selectAll: selectNotificationsMetadata,
+  selectEntities: selectMetadataEntities,
+} = notificationsAdapter.getSelectors((state) => state.notifications)
